@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EventSignal · 團隊進度看板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F8FA; --card:#FFFFFF; --line:#ECEEF2; --ink:#2B2F36; --muted:#7A828E;
+    --accent:#4C6FB1; --accent-soft:#EEF2F9; --daycol:34px; --labelw:230px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Microsoft JhengHei","PingFang TC","Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.5}
+  .wrap{max-width:1400px;margin:0 auto;padding:20px 20px 60px}
+  header.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.3px}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .filebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:10px;
+    padding:7px 13px;font-size:13px;cursor:pointer;transition:.15s;font-family:inherit}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.primary:hover{background:#3d5c98}
+  .status{font-size:12px;color:var(--muted)}
+  .filters{display:flex;gap:6px;flex-wrap:wrap;margin:16px 0 6px;align-items:center}
+  .flabel{font-size:12px;color:var(--muted);margin-right:2px}
+  .chipf{border:1px solid var(--line);background:#fff;border-radius:20px;padding:5px 12px;cursor:pointer;
+    font-size:12.5px;transition:.15s}
+  .chipf:hover{border-color:var(--accent)}
+  .chipf.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .chipf.you.active{background:#B23E7C;border-color:#B23E7C}
+
+  .layout{display:grid;grid-template-columns:1fr 372px;gap:16px;margin-top:12px;align-items:start}
+  @media(max-width:1000px){.layout{grid-template-columns:1fr}}
+
+  /* ---- Gantt ---- */
+  .gantt{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:auto}
+  .gtitle{font-weight:700;font-size:13px;padding:11px 14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px}
+  .grow{display:grid;grid-template-columns:var(--labelw) 1fr;border-bottom:1px solid #F1F3F6}
+  .wkhead,.dayhead{display:grid;grid-template-columns:var(--labelw) 1fr}
+  .trackhead{display:grid;grid-template-columns:repeat(15,1fr)}
+  .wkcell{text-align:center;font-size:11px;font-weight:700;color:#fff;padding:4px 0;border-right:1px solid #fff;overflow:hidden;white-space:nowrap}
+  .lblcorner{background:#264478;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;padding:0 12px}
+  .daynum{text-align:center;font-size:10.5px;font-weight:700;color:#5a6472;padding:4px 0;background:#F4F6F9;border-right:1px solid #fff}
+  .lbl{padding:7px 10px;border-right:1px solid #F1F3F6;background:#fff;cursor:pointer}
+  .lbl .lid{font-size:11px;font-weight:800;color:var(--muted);letter-spacing:.4px}
+  .lbl .lt{font-size:12px;font-weight:600;line-height:1.3;margin-top:1px}
+  .lbl .lo{margin-top:3px}
+  .oc{display:inline-block;font-size:10px;font-weight:700;background:#EEF1F6;color:#5a6272;border-radius:6px;padding:0 5px;margin:0 2px 0 0}
+  .oc.self{background:#B23E7C;color:#fff}
+  .track{position:relative;height:34px;background-image:linear-gradient(to right,#EEF0F3 1px,transparent 1px);background-size:calc(100%/15) 100%}
+  .bar{position:absolute;top:8px;height:18px;border-radius:5px;font-size:10px;color:#fff;font-weight:700;
+    display:flex;align-items:center;padding:0 7px;white-space:nowrap;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+  .grow:hover .lbl,.grow.sel .lbl{background:var(--accent-soft)}
+  .grow.sel{outline:2px solid var(--accent);outline-offset:-2px}
+
+  /* ---- Todo panel ---- */
+  .todo{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    position:sticky;top:12px;max-height:calc(100vh - 40px);display:flex;flex-direction:column}
+  .todo h2{font-size:13px;margin:0;padding:11px 14px;border-bottom:1px solid var(--line);font-weight:700;
+    display:flex;align-items:center;gap:8px}
+  .todo .cnt{font-size:11px;color:var(--muted);font-weight:500;margin-left:auto}
+  .tlist{overflow:auto;padding:8px}
+  .titem{border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:8px;
+    cursor:pointer;transition:.12s;border-left-width:4px}
+  .titem:hover{background:#FafBfC}
+  .titem.sel{background:#F6F8FC;box-shadow:0 0 0 1px var(--accent) inset}
+  .titem .th{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .titem .tid{font-size:11px;font-weight:800;color:var(--muted)}
+  .titem .tt{font-weight:700;font-size:13px;margin:4px 0 6px;line-height:1.35}
+  .badge{font-size:10px;font-weight:700;border-radius:20px;padding:1px 8px}
+  .days{margin-left:auto;font-size:10.5px;color:var(--muted);background:#F4F6F9;border-radius:7px;padding:1px 7px}
+  ul.bl{margin:0;padding-left:16px;font-size:12px;color:#4c545e}
+  ul.bl li{margin:2px 0}
+  ul.bl li b{color:#333;font-weight:600}
+  .mchip{display:inline-block;font-size:10.5px;font-weight:700;border-radius:7px;padding:1px 7px}
+
+  .empty{background:#fff;border:1px dashed #D3D8E0;border-radius:16px;padding:46px 20px;text-align:center;color:var(--muted)}
+  .empty h3{color:var(--ink);margin:0 0 8px;font-size:16px}
+  .drop-hi{outline:3px dashed var(--accent);outline-offset:-10px}
+  .legend{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}
+  .legend span{font-size:11px;font-weight:600;border-radius:8px;padding:3px 9px}
+  .foot{color:var(--muted);font-size:11.5px;margin-top:22px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>EventSignal · 團隊進度看板</h1>
+      <div class="sub">甘特圖為主，右欄為對應 TODO 明細。資料來源：<b>工作分配.xlsx</b>（改檔後重新載入即同步）。</div>
+    </div>
+    <div class="filebar">
+      <button class="btn primary" id="pick">重新載入 Excel</button>
+      <input type="file" id="file" accept=".xlsx,.xlsm" hidden>
+      <span class="status" id="status">尚未載入</span>
+    </div>
+  </header>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="layout">
+    <div class="gantt" id="gantt"></div>
+    <aside class="todo">
+      <h2>TODO 明細 <span class="cnt" id="tcount"></span></h2>
+      <div class="tlist" id="tlist"></div>
+    </aside>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+const MODC = {
+  "地基/架構":["#E9EFFB","#37569C"], "資料來源/爬蟲":["#EAF5E7","#4C8A39"],
+  "向量化/去重":["#E3F4F2","#1E7B74"], "LLM 摘要/分類":["#F0E9F8","#6A3FA0"],
+  "評分/籌碼":["#FCEEE1","#C56A27"], "前端/UX":["#FBE8F1","#B23E7C"],
+  "整合":["#E8EBF4","#2E4372"], "驗證":["#EFEFEF","#5F6368"], "收尾":["#F7F1DC","#957611"]
+};
+const PRIC = {"高":["#FCE7E7","#C0392B"],"中":["#FBF3DA","#96760F"],"低":["#E7F5E7","#4C8A39"]};
+const ALL7 = ["A","B","C","D","E","F","G"];
+const WEEKHEAD = [["第一週","#5B9BD5",1,5],["第二週","#70AD47",6,10],["第三週","#ED7D31",11,15]];
+const DEFROLES = {
+  A:"後端 · 基礎設施", B:"資料來源 / 爬蟲", C:"向量化 / 去重聚類", D:"LLM 摘要 / 分類",
+  E:"評分 / 市場驗證", F:"前端 / UX", G:"你 · 統籌/merge（不寫程式）"
+};
+const LS_KEY = "eventsignal_board_gantt_v1";
+let TASKS = [], ROLES = {...DEFROLES}, filterP = "ALL", selId = null;
+
+function parseOwners(v){ if(v==null)return[]; let s=String(v).trim();
+  if(s.includes("全員"))return[...ALL7];
+  return s.split(/[·、,\/\s]+/).map(x=>x.trim()).filter(Boolean); }
+function num(v){const n=parseInt(String(v).replace(/[^0-9]/g,""),10);return isNaN(n)?null:n;}
+
+function readWorkbook(ab){
+  const wb=XLSX.read(ab,{type:"array"});
+  const sh=wb.Sheets["工作分配總表"]||wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(sh,{header:1,defval:""});
+  let hi=rows.findIndex(r=>r.some(c=>String(c).trim()==="任務ID")); if(hi<0)hi=0;
+  const H=rows[hi].map(c=>String(c).trim()); const col=n=>H.indexOf(n);
+  const ci={id:col("任務ID"),wk:col("週次"),mod:col("模組"),sub:col("子任務"),
+    own:col("負責(代號)"),pri:col("優先度"),s:col("起始日"),e:col("結束日"),dep:col("相依"),dv:col("交付物")};
+  const out=[];
+  for(let i=hi+1;i<rows.length;i++){const r=rows[i];const id=String(r[ci.id]||"").trim();if(!id)continue;
+    out.push({id,wk:String(r[ci.wk]||"").trim(),mod:String(r[ci.mod]||"").trim(),sub:String(r[ci.sub]||"").trim(),
+      owners:parseOwners(r[ci.own]),pri:String(r[ci.pri]||"").trim(),s:num(r[ci.s]),e:num(r[ci.e]),
+      dep:String(r[ci.dep]||"").trim(),dv:String(r[ci.dv]||"").trim()});}
+  TASKS=out;
+  ROLES={...DEFROLES};
+  const rs=wb.Sheets["人力配置"];
+  if(rs){const rr=XLSX.utils.sheet_to_json(rs,{header:1,defval:""});
+    const rh=rr.findIndex(r=>r.some(c=>String(c).trim()==="代號"));
+    if(rh>=0){const hh=rr[rh].map(c=>String(c).trim());const pc=hh.indexOf("代號"),rc=hh.indexOf("建議主責");
+      for(let i=rh+1;i<rr.length;i++){const p=String(rr[i][pc]||"").trim();
+        if(p&&rc>=0&&rr[i][rc])ROLES[p]=String(rr[i][rc]).trim();}}}
+}
+
+function visible(){ return filterP==="ALL"?TASKS:TASKS.filter(t=>t.owners.includes(filterP)); }
+function ownersHtml(t){return t.owners.map(o=>`<span class="oc ${o===filterP?"self":""}">${o}</span>`).join("");}
+function ownerLabel(t){return t.owners.length===7?"全員":t.owners.join("·");}
+
+function renderFilters(){
+  const counts={ALL:TASKS.length}; ALL7.forEach(p=>counts[p]=TASKS.filter(t=>t.owners.includes(p)).length);
+  let h=`<span class="flabel">篩選：</span><div class="chipf ${filterP==="ALL"?"active":""}" data-p="ALL">全部 (${counts.ALL})</div>`;
+  h+=ALL7.map(p=>`<div class="chipf ${p==="G"?"you":""} ${filterP===p?"active":""}" data-p="${p}">${p}${p==="G"?"（你）":""} · ${(ROLES[p]||"").split(" · ")[0].split("/")[0].trim()} (${counts[p]||0})</div>`).join("");
+  const box=document.getElementById("filters"); box.innerHTML=h;
+  box.querySelectorAll(".chipf").forEach(el=>el.onclick=()=>{filterP=el.dataset.p;selId=null;render();});
+}
+
+function renderGantt(){
+  const box=document.getElementById("gantt");
+  const ts=visible();
+  let h=`<div class="gtitle">甘特圖 · D1–D15（長條＝工期，點任務看右側明細）</div>`;
+  h+=`<div class="wkhead"><div class="lblcorner">任務</div><div class="trackhead">`;
+  WEEKHEAD.forEach(([n,c,a,b])=>{ for(let d=a;d<=b;d++){ h+=`<div class="wkcell" style="background:${c}">${d===a?n:""}</div>`; } });
+  h+=`</div></div>`;
+  h+=`<div class="dayhead"><div class="lblcorner" style="background:#F4F6F9;color:#5a6472">日</div><div class="trackhead">`;
+  for(let d=1;d<=15;d++) h+=`<div class="daynum">D${d}</div>`;
+  h+=`</div></div>`;
+  ts.forEach(t=>{
+    const c=MODC[t.mod]||["#eee","#888"];
+    const hasR=t.s!=null&&t.e!=null;
+    const left=hasR?(t.s-1)/15*100:0, width=hasR?(t.e-t.s+1)/15*100:0, dur=hasR?(t.e-t.s+1):0;
+    h+=`<div class="grow ${t.id===selId?"sel":""}" data-id="${t.id}">`;
+    h+=`<div class="lbl"><div class="lid">${t.id}</div><div class="lt">${t.sub}</div><div class="lo">${ownersHtml(t)}</div></div>`;
+    h+=`<div class="track">`;
+    if(hasR) h+=`<div class="bar" style="left:${left}%;width:calc(${width}% - 3px);background:${c[1]}" title="${t.sub}（D${t.s}–D${t.e}）">${ownerLabel(t)} · ${dur}天</div>`;
+    h+=`</div></div>`;
+  });
+  box.innerHTML=h;
+  box.querySelectorAll(".grow[data-id]").forEach(el=>{
+    el.onclick=()=>{ selId=el.dataset.id; render(); const it=document.querySelector(`.titem[data-id="${selId}"]`); if(it) it.scrollIntoView({block:"nearest",behavior:"smooth"}); };
+  });
+}
+
+function renderTodos(){
+  const ts=visible();
+  document.getElementById("tcount").textContent=`${ts.length} 項`;
+  const box=document.getElementById("tlist");
+  box.innerHTML=ts.map(t=>{
+    const c=MODC[t.mod]||["#eee","#888"], p=PRIC[t.pri]||["#eee","#555"];
+    const range=(t.s!=null&&t.e!=null)?`D${t.s}–D${t.e}`:"";
+    const dur=(t.s!=null&&t.e!=null)?`（${t.e-t.s+1} 天）`:"";
+    return `<div class="titem ${t.id===selId?"sel":""}" data-id="${t.id}" style="border-left-color:${c[1]}">
+      <div class="th"><span class="tid">${t.id}</span>
+        <span class="badge" style="background:${p[0]};color:${p[1]}">${t.pri}</span>
+        <span class="days">${range}${dur}</span></div>
+      <div class="tt">${t.sub}</div>
+      <ul class="bl">
+        <li><b>模組：</b><span class="mchip" style="background:${c[0]};color:${c[1]}">${t.mod}</span></li>
+        <li><b>負責：</b>${t.owners.map(o=>`<span class="oc ${o===filterP?"self":""}">${o}</span>`).join("")}</li>
+        ${t.dep&&t.dep!=="-"?`<li><b>相依：</b>${t.dep}</li>`:""}
+        ${t.dv&&t.dv!=="-"?`<li><b>交付：</b>${t.dv}</li>`:""}
+      </ul></div>`;
+  }).join("");
+  box.querySelectorAll(".titem").forEach(el=>el.onclick=()=>{
+    selId=el.dataset.id; render();
+    const row=document.querySelector(`.grow[data-id="${selId}"]`); if(row) row.scrollIntoView({block:"nearest",behavior:"smooth"});
+  });
+}
+
+function renderLegend(){
+  document.getElementById("legend").innerHTML=Object.keys(MODC).map(m=>`<span style="background:${MODC[m][0]};color:${MODC[m][1]}">${m}</span>`).join("");
+}
+
+function render(){
+  renderFilters();
+  const layout=document.querySelector(".layout");
+  if(!TASKS.length){
+    layout.style.display="none"; document.getElementById("legend").innerHTML="";
+    if(!document.getElementById("emptybox")){
+      const d=document.createElement("div"); d.id="emptybox"; d.className="empty";
+      d.innerHTML=`<h3>載入工作分配 Excel</h3><p>把 <b>工作分配.xlsx</b> 拖進視窗，或點右上「重新載入 Excel」。</p>
+        <p style="font-size:12px">部署到 GitHub Pages 後會自動載入，免手選。</p>`;
+      layout.after(d);
+    }
+    return;
+  }
+  const eb=document.getElementById("emptybox"); if(eb)eb.remove();
+  layout.style.display="";
+  renderGantt(); renderTodos(); renderLegend();
+}
+
+function setStatus(name,ts){document.getElementById("status").textContent=name?`已載入：${name}　${ts||""}`:"尚未載入";}
+function cache(name){try{localStorage.setItem(LS_KEY,JSON.stringify({tasks:TASKS,roles:ROLES,name,ts:Date.now()}));}catch(e){}}
+function loadCache(){try{const raw=localStorage.getItem(LS_KEY);if(!raw)return false;const o=JSON.parse(raw);
+  if(!o.tasks||!o.tasks.length)return false;TASKS=o.tasks;ROLES={...DEFROLES,...(o.roles||{})};
+  setStatus(o.name+"（上次載入）",new Date(o.ts).toLocaleString("zh-TW"));return true;}catch(e){return false;}}
+function handleFile(f){const rd=new FileReader();rd.onload=e=>{try{readWorkbook(new Uint8Array(e.target.result));
+  cache(f.name);setStatus(f.name,new Date().toLocaleString("zh-TW"));render();}catch(err){alert("讀取失敗："+err.message);}};
+  rd.readAsArrayBuffer(f);}
+
+document.getElementById("pick").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{if(e.target.files[0])handleFile(e.target.files[0]);};
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();document.body.classList.add("drop-hi");}));
+["dragleave","drop"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();if(ev!=="dragover")document.body.classList.remove("drop-hi");}));
+document.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)handleFile(f);});
+
+document.getElementById("foot").innerHTML=
+  "運作方式：本頁讀取同資料夾的 <b>工作分配.xlsx</b>。GitHub Pages（https）上會自動載入；本機 file:// 開啟需手選一次檔案（會記住上次內容）。改 Excel 存檔後重新載入即同步。";
+
+(async()=>{
+  loadCache(); render();
+  try{const res=await fetch("工作分配.xlsx",{cache:"no-store"});
+    if(res.ok){const ab=await res.arrayBuffer();readWorkbook(new Uint8Array(ab));
+      cache("工作分配.xlsx");setStatus("工作分配.xlsx",new Date().toLocaleString("zh-TW"));render();}}catch(e){}
+})();
+</script>
+</body>
+</html>

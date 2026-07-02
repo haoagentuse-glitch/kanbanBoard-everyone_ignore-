@@ -36,7 +36,7 @@
   @media(max-width:1000px){.layout{grid-template-columns:1fr}}
 
   /* ---- Gantt ---- */
-  .gantt{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:auto}
+  .gantt{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:auto;-webkit-overflow-scrolling:touch}
   .gtitle{font-weight:700;font-size:13px;padding:11px 14px;border-bottom:1px solid var(--line);
     display:flex;align-items:center;gap:8px}
   .grow{display:grid;grid-template-columns:var(--labelw) 1fr;border-bottom:1px solid #F1F3F6}
@@ -101,6 +101,26 @@
   .modal ul.nl{margin:0;padding-left:18px;font-size:13px;line-height:1.7;color:#3c434c}
   .modal ul.nl li{margin:3px 0}
   .modal .none{color:var(--muted);font-size:13px}
+
+  /* ---- 手機版（<760px）---- */
+  @media(max-width:760px){
+    :root{--labelw:150px}
+    .wrap{padding:12px 10px 40px}
+    h1{font-size:17px}
+    /* TODO 明細移到最上面（手機上最常看的），甘特圖在下、可左右滑 */
+    .layout{display:flex;flex-direction:column}
+    .todo{order:-1;position:static;max-height:none}
+    .tlist{max-height:55vh}
+    .wkhead,.dayhead,.grow{min-width:640px}
+    .gtitle{position:sticky;left:0}
+    /* 放大點按目標 */
+    .btn{padding:10px 15px;font-size:14px}
+    .chipf{padding:8px 13px;font-size:13px}
+    .modal .mx{width:34px;height:34px;font-size:18px}
+    .mback{padding:10px}
+    .modal{max-height:88vh}
+    .modal ul.nl{font-size:13.5px}
+  }
 </style>
 </head>
 <body>
@@ -205,7 +225,7 @@ function renderFilters(){
 function renderGantt(){
   const box=document.getElementById("gantt");
   const ts=visible();
-  let h=`<div class="gtitle">甘特圖 · D1–D15（長條＝工期，點任務看右側明細）</div>`;
+  let h=`<div class="gtitle">甘特圖 · D1–D15（長條＝工期，點任務看明細；手機可左右滑）</div>`;
   h+=`<div class="wkhead"><div class="lblcorner">任務</div><div class="trackhead">`;
   WEEKHEAD.forEach(([n,c,a,b])=>{ for(let d=a;d<=b;d++){ h+=`<div class="wkcell" style="background:${c}">${d===a?n:""}</div>`; } });
   h+=`</div></div>`;
